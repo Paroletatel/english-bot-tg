@@ -9,6 +9,11 @@ const ft = require('flip-text')
 const path = require('path')
 const fs =  require('fs')
 const fsExists = require('fs.promises.exists')
+const OpenAI  = require('openai');
+
+const openAi = new OpenAI({
+    apiKey: process.env.API_KEY
+});
 
 
 const directory = path.dirname(require.main.filename)
@@ -317,19 +322,46 @@ const start = () => {
         await bot.sendVoice(chatId, voice)
     }
 
-    async function solveTranslate(rightAnswer, asw){
-        const similarity = stringSimilarity.compareTwoStrings(rightAnswer.toUpperCase(), asw.toUpperCase())
+    async function solveTranslate(rightAnswers, userAnswer){
+        // const similarity = stringSimilarity.compareTwoStrings(rightAnswer.toUpperCase(), asw.toUpperCase())
 
-        if (similarity > 0.95) {
-            return {
-                res: true,
-                text: `Вы перевели:\n${asw}\nЭто на ${Math.floor(similarity*100)}% совпадает с правильным вариантом\n(${rightAnswer})`
+        // if (similarity > 0.95) {
+        //     return {
+        //         res: true,
+        //         text: `Вы перевели:\n${asw}\nЭто на ${Math.floor(similarity*100)}% совпадает с правильным вариантом\n(${rightAnswer})`
+        //     }
+        // }
+        // return {
+        //     res: false,
+        //     text: `Вы перевели:\n${asw}\nЭто на ${Math.floor(similarity*100)}% совпадает с правильным вариантом\n(${ft(rightAnswer)})\nПопробуйте ещё раз!`
+        // }
+            const prompt = `Ты - учитель английского языка для учеников говорящих на русском. У тебя есть несколько или один правильных переводов русской фразы на английский: [${rightAnswers.join(', ')}].\nПользователь перевел эту фразу как: "${userAnswer}".\nПроверь соответствует ли перевод пользователя хотя бы одному из верных переводов, и поясните почему это верный перевод. При проверке учитывай правила английсткого языка: предложение должно быть составлено грамматически и лексически верно. Если перевод не соотносится ни с одним из верных или имеет ошибки, объясните почему и дайте подсказку, но не говорите полностью верный вариант а так же попроси его попробовать еще раз. А если перевод верный то скажи как еще можно перевести если для этого задания было несколько правильных вариантов\nВерните результат в формате JSON с полями "res" (true если перевод верный и false если нет) и "text" (пояснение для пользователя на русском языке, поясняй как учитель). Не возвращай ничего кроме json`;
+
+        const res = await openAi.chat.completions.create({
+            model: 'gpt-4o',
+            messages: [
+                {role: "assistant" || "user", content: prompt}
+            ],
+            temperature: 0.7
+        });
+        
+            const message = res.choices[0].message.content;
+        
+            // Попытаемся распарсить ответ как JSON
+            let result;
+            try {
+                result = JSON.parse(message);
+            } catch (e) {
+                result = { res: false, text: "Ошибка в ответе ChatGPT. Попробуйте ещё раз!" };
+                console.log(result)
             }
-        }
-        return {
-            res: false,
-            text: `Вы перевели:\n${asw}\nЭто на ${Math.floor(similarity*100)}% совпадает с правильным вариантом\n(${ft(rightAnswer)})\nПопробуйте ещё раз!`
-        }
+        
+            // Проверка на наличие необходимых полей в результате
+            if (typeof result.res === 'boolean' && typeof result.text === 'string') {
+                return result;
+            } else {
+                return { res: false, text: "Ошибка в формате ответа ChatGPT. Попробуйте ещё раз!" };
+            }
     }
 
     async function createTranslate(chatId, task){
