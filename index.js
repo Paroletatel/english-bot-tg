@@ -359,7 +359,7 @@ const start = () => {
             try {
                 result = JSON.parse(message);
             } catch (e) {
-                result = { res: false, text: "Ошибка в ответе ChatGPT. Попробуйте ещё раз!" };
+                result = { res: false, text: "Ошибка в ответе искуственного интеллекта. Попробуйте ещё раз!" };
                 console.log(result)
             }
         
@@ -367,7 +367,7 @@ const start = () => {
             if (typeof result.res === 'boolean' && typeof result.text === 'string') {
                 return result;
             } else {
-                return { res: false, text: "Ошибка в формате ответа ChatGPT. Попробуйте ещё раз!" };
+                return { res: false, text: "Ошибка в формате ответа искуственного интеллекта. Попробуйте ещё раз!" };
             }
     }
 
