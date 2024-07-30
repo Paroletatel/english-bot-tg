@@ -18,6 +18,7 @@
     "gtts": "^0.2.1",
     "node-telegram-bot-api": "^0.59.0",
     "nodemon": "^2.0.20",
+    "openai": "^4.53.2",
     "request": "^2.88.2",
     "request-promise": "^4.2.6",
     "string-similarity": "^4.0.4"
