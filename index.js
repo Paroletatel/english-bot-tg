@@ -10,9 +10,16 @@ const path = require('path')
 const fs =  require('fs')
 const fsExists = require('fs.promises.exists')
 const OpenAI  = require('openai');
+const HttpsProxyAgent = require('https-proxy-agent')
 
+const httpsAgent = new HttpsProxyAgent({
+    host: '45.141.185.132',
+    port: '5914',
+    auth: 'user95700:qkpa03',
+})
 const openAi = new OpenAI({
-    apiKey: process.env.API_KEY
+    apiKey: process.env.API_KEY,
+    httpAgent: httpsAgent,
 });
 
 
