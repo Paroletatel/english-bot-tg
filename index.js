@@ -557,7 +557,7 @@ const start = () => {
             reply_markup: JSON.stringify({
                 keyboard:
                 [
-                    ...tasks
+                    ...tasks.sort((a,b) => a.taskNumber - b.taskNumber)
                         .map(item => {
                         return [{text: `Exercise ${item.taskNumber}. ${item.taskName}`}]
                     }),
