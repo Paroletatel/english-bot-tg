@@ -190,27 +190,39 @@ const start = () => {
         }
 
         await bot.sendMessage(chatId, `Задание №${taskNumber}`, returnButtons)
-        await bot.sendMessage(chatId, task.taskType, 
-            // {
-            //     reply_markup: JSON.stringify({remove_keyboard: true})
-            // }
-        )
 
 
         if(taskType === 'the_video'){
+            await bot.sendMessage(chatId, task.taskType)
             await setUserState(chatId, arrUsers[chatId].unitNum, arrUsers[chatId].lessonNum, taskNumber, 0)
             await createVideo(chatId, task, 0)
         }
         if(taskType === 'the_translate'){
+            await bot.sendMessage(chatId, task.taskType, 
+                {
+                    reply_markup: JSON.stringify({remove_keyboard: true})
+                }
+            )
             await createTranslate(chatId, task)
         }
         if(taskType === 'the_repeat'){
+            await bot.sendMessage(chatId, task.taskType, 
+                {
+                    reply_markup: JSON.stringify({remove_keyboard: true})
+                }
+            )
             await createRepeat(chatId, task)
         }
         if(taskType === 'the_speech_recognition'){
+            await bot.sendMessage(chatId, task.taskType, 
+                {
+                    reply_markup: JSON.stringify({remove_keyboard: true})
+                }
+            )
             await createSpeechRecognition(chatId, task)
         }
         if(taskType === 'the_right_one'){
+            await bot.sendMessage(chatId, task.taskType)
             await createRightOne(chatId, task)
         }
     }
