@@ -303,18 +303,41 @@ const start = () => {
     }
 
     async function solveSpeechRecognition(rightAnswer, asw) {
-        const similarity = stringSimilarity.compareTwoStrings(rightAnswer.toUpperCase(), asw.toUpperCase())
+        const prompt = `Верни json! Есть строка образец: ${rightAnswer}. И есть строка ответ: ${asw}. Строка ответ является результатом распознавания речи. Сравни эти строки не обращая внимания на знаки препинания и любые символы кроме самих слов. Нужно вычислить в процентах насколько правильно распознана речь. 100 процентов - это когда все слова и порядок слов совпадают со строкой образцом. Ответ верни в форме json где в поле res укажи true если совпадение больше 95% и false если менее, а в поле text укажи текст по типу "Вы сказали:
+Hello how are you im fine thanks
+Это на 94% совпадает с правильным вариантом
+(hello how are you I am fine thanks)
+Попробуйте ещё раз!" в случае менее 95% совпадения с образцом, а в случае более "Вы сказали:
+Hello how are you im fine thanks
+Это на 94% совпадает с правильным вариантом
+(hello how are you I am fine thanks)"  Не возвращай ничего кроме json`;
 
-        if (similarity > 0.95) {
-            return {
-                res: true,
-                text: `Вы сказали:\n${asw}\nЭто на ${Math.floor(similarity*100)}% совпадает с правильным вариантом\n(${rightAnswer})`
+        const res = await openAi.chat.completions.create({
+            model: 'gpt-4o',
+            messages: [
+                {role: "user", content: prompt}
+            ],
+            response_format: { type: 'json_object' },
+            temperature: 0.7
+        });
+        
+            const message = res.choices[0].message.content;
+        
+            // Попытаемся распарсить ответ как JSON
+            let result;
+            try {
+                result = JSON.parse(message);
+            } catch (e) {
+                result = { res: false, text: "Ошибка в ответе искуственного интеллекта. Попробуйте ещё раз!" };
+                console.log(result)
             }
-        }
-        return {
-            res: false,
-            text: `Вы сказали:\n${asw}\nЭто на ${Math.floor(similarity*100)}% совпадает с правильным вариантом\n(${rightAnswer})\nПопробуйте ещё раз!`
-        }
+        
+            // Проверка на наличие необходимых полей в результате
+            if (typeof result.res === 'boolean' && typeof result.text === 'string') {
+                return result;
+            } else {
+                return { res: false, text: "Ошибка в формате ответа искуственного интеллекта. Попробуйте ещё раз!" };
+            }
     }
 
     async function createSpeechRecognition(chatId, task){
@@ -345,18 +368,6 @@ const start = () => {
     }
 
     async function solveTranslate(rightAnswers, userAnswer){
-        // const similarity = stringSimilarity.compareTwoStrings(rightAnswer.toUpperCase(), asw.toUpperCase())
-
-        // if (similarity > 0.95) {
-        //     return {
-        //         res: true,
-        //         text: `Вы перевели:\n${asw}\nЭто на ${Math.floor(similarity*100)}% совпадает с правильным вариантом\n(${rightAnswer})`
-        //     }
-        // }
-        // return {
-        //     res: false,
-        //     text: `Вы перевели:\n${asw}\nЭто на ${Math.floor(similarity*100)}% совпадает с правильным вариантом\n(${ft(rightAnswer)})\nПопробуйте ещё раз!`
-        // }
             const prompt = `Верни json! Ты - учитель английского языка для учеников говорящих на русском. У тебя есть несколько или один правильных переводов русской фразы на английский: [${rightAnswers.join(', ')}].\nПользователь перевел эту фразу как: "${userAnswer}".\nПроверь соответствует ли перевод пользователя хотя бы одному из верных переводов. Не называй правильный ответ целиком пока пользователь не переведет верно! При проверке учитывай правила английсткого языка: предложение должно быть составлено грамматически и лексически верно. Если перевод не соотносится ни с одним из верных или имеет ошибки, объясните почему и дайте подсказку, но не говорите полностью верный вариант а так же попроси его попробовать еще раз. А если перевод верный то скажи как еще можно перевести если для этого задания было несколько правильных вариантов\nВерните результат в формате JSON с полями "res" (true если перевод верный и false если нет) и "text" (пояснение для пользователя на русском языке, поясняй как учитель). Не возвращай ничего кроме json`;
 
         const res = await openAi.chat.completions.create({
