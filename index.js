@@ -11,8 +11,9 @@ const fs =  require('fs')
 const fsExists = require('fs.promises.exists')
 const OpenAI  = require('openai');
 const HttpsProxyAgent = require('https-proxy-agent')
+const dedent = require('dedent')
 
-//process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 const httpsAgent = new HttpsProxyAgent({
     host: '45.141.185.132',
@@ -248,7 +249,7 @@ const start = () => {
         }
 
         if(taskType === 'the_speech_recognition'){
-            var res = await solveSpeechRecognition(task.rightAnswer, text)
+            var res = await solveSpeechRecognition(task.rightAnswer, text, task.taskText)
         }
 
         if(taskType === 'the_right_one'){
@@ -302,20 +303,41 @@ const start = () => {
         await bot.sendMessage(chatId, task.taskText, buttonsAnswers)
     }
 
-    async function solveSpeechRecognition(rightAnswer, asw) {
-        const prompt = `Верни json! Есть строка образец: ${rightAnswer}. И есть строка ответ: ${asw}. Строка ответ является результатом распознавания речи. Сравни эти строки не обращая внимания на знаки препинания и любые символы кроме самих слов. Нужно вычислить в процентах насколько правильно распознана речь. 100 процентов - это когда все слова и порядок слов совпадают со строкой образцом. Ответ верни в форме json где в поле res укажи true если совпадение больше 95% и false если менее, а в поле text укажи текст по типу "Вы сказали:
-Hello how are you im fine thanks
-Это на 94% совпадает с правильным вариантом
-(hello how are you I am fine thanks)
-Попробуйте ещё раз!" в случае менее 95% совпадения с образцом, а в случае более "Вы сказали:
-Hello how are you im fine thanks
-Это на 94% совпадает с правильным вариантом
-(hello how are you I am fine thanks)"  Не возвращай ничего кроме json`;
+    async function solveSpeechRecognition(rightAnswer, asw, task) {
+        const system = dedent`
+        You are the best teacher of English for russian people
+
+        At the entrance you will be given a transcription of the user's speech
+
+        Your main task is compare [rightAnswer] with a answer of a user.
+        
+        Check the user's answer with the correct answer and give him a hint if the answer does not match.
+
+        The answer must meet all standards of the English language
+
+        #exercise: ${task}
+        #rightAnswer: ${rightAnswer.replace(/[.,!?$%\^&\*;:{}=\-_`~()«»"'\[\]]/g, "")}
+
+        return json
+
+        response format:
+
+        {
+            res: boolean,
+            text: string
+        }
+
+        VERY IMPORTANT
+        - PUNCTUATION IS NOT A SUBJECT OF THE ASSESSMENT
+        - DON'T SAY ANYTHING ABOUT PUNCTUATION
+        - LOOK ONLY AT THE WORDS THEMSELVES
+        `
 
         const res = await openAi.chat.completions.create({
             model: 'gpt-4o',
             messages: [
-                {role: "user", content: prompt}
+                {role: 'system', content: system},
+                {role: "user", content: 'user said: ' + asw}
             ],
             response_format: { type: 'json_object' },
             temperature: 0.7
