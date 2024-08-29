@@ -324,7 +324,7 @@ const start = () => {
 
         {
             res: boolean,
-            text: string
+            text: string //not empty
         }
 
         VERY IMPORTANT
