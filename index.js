@@ -12,7 +12,7 @@ const fsExists = require('fs.promises.exists')
 const OpenAI  = require('openai');
 const HttpsProxyAgent = require('https-proxy-agent')
 
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+//process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 const httpsAgent = new HttpsProxyAgent({
     host: '45.141.185.132',
