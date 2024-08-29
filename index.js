@@ -12,6 +12,8 @@ const fsExists = require('fs.promises.exists')
 const OpenAI  = require('openai');
 const HttpsProxyAgent = require('https-proxy-agent')
 
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
 const httpsAgent = new HttpsProxyAgent({
     host: '45.141.185.132',
     port: '5914',
@@ -84,10 +86,11 @@ const start = () => {
     })
 
     bot.on('message', async msg => {
+        
         const text = msg.text
         const chatId = msg.chat.id
         const user = msg.from.username
-        // return
+        //return
 
 
         if(Object.keys(msg).includes("voice")){
@@ -187,11 +190,11 @@ const start = () => {
         }
 
         await bot.sendMessage(chatId, `Задание №${taskNumber}`, returnButtons)
-        await bot.sendMessage(chatId, task.taskType, {
-            reply_markup: JSON.stringify({
-                remove_keyboard: true
-            })
-        })
+        await bot.sendMessage(chatId, task.taskType, 
+            // {
+            //     reply_markup: JSON.stringify({remove_keyboard: true})
+            // }
+        )
 
 
         if(taskType === 'the_video'){
@@ -487,14 +490,19 @@ const start = () => {
 
         setUserState(chatId)
 
+        try {
+            await bot.sendSticker(chatId, 'https://tlgrm.eu/_/stickers/556/44c/55644c98-65e1-4e92-b22e-26c930f07378/8.webp'
+                //     , {
+                //     reply_markup: JSON.stringify({
+                //         remove_keyboard: true
+                //     })
+                // }
+                )
+        } catch(e) {
+            console.log('error')
 
-        await bot.sendSticker(chatId, 'https://tlgrm.eu/_/stickers/556/44c/55644c98-65e1-4e92-b22e-26c930f07378/8.webp'
-        //     , {
-        //     reply_markup: JSON.stringify({
-        //         remove_keyboard: true
-        //     })
-        // }
-        )
+        }
+        
         return await bot.sendMessage(chatId, "Привет, я бот - учитель английского языка!", startStudy)
     }
 
