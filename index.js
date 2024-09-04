@@ -94,14 +94,14 @@ const start = () => {
                         fs.unlinkSync(outputFilePath);
                     } else {
                         const videoFileId = msg.video.file_id;
-                        bot.sendMessage(chatId, `${videoFileId}`);
+                        await bot.sendMessage(chatId, `${videoFileId}`);
 
                         fs.unlinkSync(inputFilePath);
                     }
                 });
             } catch (error) {
                 console.error('Ошибка обработки видео:', error);
-                bot.sendMessage(chatId, 'Произошла ошибка при обработке видео.');
+                await bot.sendMessage(chatId, 'Произошла ошибка при обработке видео.');
             }
         }
     });
@@ -110,82 +110,99 @@ const start = () => {
     ])
     bot.on('voice', async msg => {
         const chatId = msg.chat.id
-        const user = await stageManager.getUserState(chatId)
+        try {
+            const user = await stageManager.getUserState(chatId)
 
-        const fileLink = await bot.getFileLink(msg.voice.file_id)
+            const fileLink = await bot.getFileLink(msg.voice.file_id)
 
-        const text = await recognizeSpeech(fileLink)
+            const text = await recognizeSpeech(fileLink)
 
-        if(typeof text != "string"){
-            return bot.sendMessage(chatId, `Ошибка:\n${text.message}`)
+            if(typeof text != "string"){
+                return bot.sendMessage(chatId, `Ошибка:\n${text.message}`)
+            }
+
+            if((user? user.taskNumber : user)){
+                return solveTask(chatId, text, bot)
+            }
+        } catch (error) {
+            console.log(error)
         }
 
-        if((user? user.taskNumber : user)){
-            return solveTask(chatId, text, bot)
-        }
     })
 
     bot.on('message', async msg => {
         
         const text = msg.text
         const chatId = msg.chat.id
-        const user = await  stageManager.getUserState(chatId)
+
+        try {
+            const user = await  stageManager.getUserState(chatId)
 
 
-        if(Object.keys(msg).includes("voice")){
-            return
-        }
-
-        if (text === '/start') {
-            return startMessage(bot, chatId)
-        }
-
-        if (text === 'Список разделов') {
-            return unitList(bot, chatId)
-        }
-
-        if(Object.keys(navigationPanel).includes(text)){
-            return navigationPanel[text].fun(bot, chatId)
-        }
-
-        if(text !== undefined){
-            if (text.slice(0, 1) !== '/' && (user? user.taskNumber : user)) {
-                return solveTask(chatId, text, bot)
+            if(Object.keys(msg).includes("voice")){
+                return
             }
 
-            if (text.split(' ')[1] !== undefined && !isNaN(text.split(' ')[1].slice(0, 1))){
-                if (user === undefined) return
-                if(user.unitNum === null && text.split(' ')[0] === 'Unit'){
-                    return selectUnit(bot, chatId, text.split(' ')[1])
+            if (text === '/start') {
+                return startMessage(bot, chatId)
+            }
+
+            if (text === 'Список разделов') {
+                return unitList(bot, chatId)
+            }
+
+            if(Object.keys(navigationPanel).includes(text)){
+                return navigationPanel[text].fun(bot, chatId)
+            }
+
+            if(text !== undefined){
+                if (text.slice(0, 1) !== '/' && (user? user.taskNumber : user)) {
+                    return solveTask(chatId, text, bot)
                 }
-                if(user.lessonNum === null && text.split(' ')[0] === 'Lesson'){
-                    return selectLesson(bot, chatId, text.split(' ')[1])
-                }
-                if(user.taskNumber === null && text.split(' ')[0] === 'Exercise'){
-                    return lessonTask(bot, chatId, text.split(' ')[1])
+
+                if (text.split(' ')[1] !== undefined && !isNaN(text.split(' ')[1].slice(0, 1))){
+                    if (user === undefined) return
+                    if(user.unitNum === null && text.split(' ')[0] === 'Unit'){
+                        return selectUnit(bot, chatId, text.split(' ')[1])
+                    }
+                    if(user.lessonNum === null && text.split(' ')[0] === 'Lesson'){
+                        return selectLesson(bot, chatId, text.split(' ')[1])
+                    }
+                    if(user.taskNumber === null && text.split(' ')[0] === 'Exercise'){
+                        return lessonTask(bot, chatId, text.split(' ')[1])
+                    }
                 }
             }
+
+
+            return bot.sendMessage(chatId, 'Неверная команда')
+        } catch(error) {
+            console.log(error)
         }
 
-
-        return bot.sendMessage(chatId, 'Неверная команда')
     })
     bot.on('callback_query', async msg => {
         const data = msg.data
         const chatId = msg.message.chat.id
-        const user = await stageManager.getUserState(chatId)
-        const tasks = await stageManager.getTasks(user.lessonNum, user.unitNum)
 
-        console.log(data)
+        try {
+            const user = await stageManager.getUserState(chatId)
+            const tasks = await stageManager.getTasks(user.lessonNum, user.unitNum)
 
-        if (data === "/tasks") {
-            if(tasks === undefined){
-                return startMessage(bot, chatId)
+            console.log(data)
+
+            if (data === "/tasks") {
+                if(tasks === undefined){
+                    return startMessage(bot, chatId)
+                }
+                return showTasks(chatId, tasks)
             }
-            return showTasks(chatId, tasks)
+
+            return bot.sendMessage(chatId, 'Неверно, попробуй еще раз)')
+        } catch(error) {
+            console.log(error)
         }
 
-        return bot.sendMessage(chatId, 'Неверно, попробуй еще раз)')
     })
 
     async function lessonTask(bot, chatId, text) {
