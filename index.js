@@ -272,7 +272,7 @@ const start = () => {
         const taskType = task.type
 
         if(taskType === 'the_video'){
-            const stage = arrUsers[chatId].stage
+            const stage = user.stage
             var res = await solveVideo(chatId, task, text, stage)
         }
 
