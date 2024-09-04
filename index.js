@@ -1,19 +1,22 @@
-require('dotenv').config()
-const TelegramApi = require('node-telegram-bot-api')
-const token = process.env.BOT_TOKEN
-const yandexToken = process.env.YANDEX_TOKEN
-const axios = require('axios')
-const request = require('request-promise')
-const stringSimilarity = require("string-similarity");
-const ft = require('flip-text')
-const path = require('path')
-const fs =  require('fs')
-const fsExists = require('fs.promises.exists')
-const OpenAI  = require('openai');
-const HttpsProxyAgent = require('https-proxy-agent')
-const dedent = require('dedent')
+import dotenv from 'dotenv';
+import TelegramApi from 'node-telegram-bot-api';
+import axios from 'axios';
+import request from 'request-promise';
+import path from 'path';
+import ffmpeg from 'fluent-ffmpeg';
+import fs from 'fs';
+import fsExists from 'fs.promises.exists';
+import OpenAI from 'openai';
+import HttpsProxyAgent from 'https-proxy-agent';
+import dedent from 'dedent';
+import { State } from './state.js';
+import { fileURLToPath } from 'url';
+dotenv.config();
 
-//process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+const token = process.env.BOT_TOKEN;
+const yandexToken = process.env.YANDEX_TOKEN;
+
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 const httpsAgent = new HttpsProxyAgent({
     host: '45.141.185.132',
@@ -26,10 +29,13 @@ const openAi = new OpenAI({
 });
 
 
-const directory = path.dirname(require.main.filename)
+const __filename = fileURLToPath(import.meta.url);
+
+// Получаем путь к каталогу
+const directory = path.dirname(__filename);
 const bot = new TelegramApi(token, {polling: true})
-const arrUsers = {}
 let counter = 5
+const stageManager = new State();
 
 
 const navigationPanel = {
@@ -44,32 +50,67 @@ const navigationPanel = {
         lessonNum: (x)=>{return x === null},
         taskNumber: (x)=>{return x === null},
         fun: async (bot, chatId)=>{
-            await setUserState(chatId)
-            unitList(bot, chatId)
+            await stageManager.setUserState(chatId)
+            await unitList(bot, chatId)
         }
     },
     'Выбор Урока': {
         unitNum: (x)=>{return x > 0},
         lessonNum: (x)=>{return x > 0},
         taskNumber: (x)=>{return x === null},
-        fun: async (bot, chatId)=>{
-            await setUserState(chatId, arrUsers[chatId].unitNum)
-            selectUnit(bot, chatId, `${arrUsers[chatId].unitNum}.`)
+        fun: async (bot, chatId, unitNum)=>{
+            await stageManager.setUserState(chatId, unitNum)
+            await selectUnit(bot, chatId, `${unitNum}.`)
         }
     }
 }
 
 
 const start = () => {
-    // getAllTasks()
-    initUsers()
+    bot.on('channel_post', async (msg) => {
+        const chatId = msg.chat.id;
 
+        if (msg.video) {
+            try {
+                const filePath = await bot.downloadFile(msg.video.file_id, './');
+                const inputFilePath = path.resolve(filePath);
+                const outputFilePath = `${inputFilePath}_converted.mp4`;
+
+                ffmpeg.ffprobe(inputFilePath, async (err, metadata) => {
+                    if (err) {
+                        throw err;
+                    }
+
+                    const hasH264 = metadata.streams.some((stream) =>
+                        stream.codec_name === 'h264' && stream.codec_type === 'video');
+
+                    if (!hasH264) {
+                        await convertVideoToH264(inputFilePath, outputFilePath);
+
+                        await bot.sendMessage(chatId, `Видео сконвертировано, перешлите его в этот канал для получения id\n⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️`);
+                        await bot.sendVideo(chatId, outputFilePath);
+
+                        fs.unlinkSync(inputFilePath);
+                        fs.unlinkSync(outputFilePath);
+                    } else {
+                        const videoFileId = msg.video.file_id;
+                        bot.sendMessage(chatId, `${videoFileId}`);
+
+                        fs.unlinkSync(inputFilePath);
+                    }
+                });
+            } catch (error) {
+                console.error('Ошибка обработки видео:', error);
+                bot.sendMessage(chatId, 'Произошла ошибка при обработке видео.');
+            }
+        }
+    });
     bot.setMyCommands([
         {command: '/start', description: 'Познакомиться'},
     ])
     bot.on('voice', async msg => {
         const chatId = msg.chat.id
-        const user = msg.from.username
+        const user = await stageManager.getUserState(chatId)
 
         const fileLink = await bot.getFileLink(msg.voice.file_id)
 
@@ -79,19 +120,16 @@ const start = () => {
             return bot.sendMessage(chatId, `Ошибка:\n${text.message}`)
         }
 
-        if((arrUsers[chatId]? arrUsers[chatId].taskNumber : arrUsers[chatId])){
+        if((user? user.taskNumber : user)){
             return solveTask(chatId, text, bot)
         }
-
-        return  bot.sendMessage(chatId, `Вы сказали:\n${text}`)
     })
 
     bot.on('message', async msg => {
         
         const text = msg.text
         const chatId = msg.chat.id
-        const user = msg.from.username
-        //return
+        const user = await  stageManager.getUserState(chatId)
 
 
         if(Object.keys(msg).includes("voice")){
@@ -111,19 +149,19 @@ const start = () => {
         }
 
         if(text !== undefined){
-            if (text.slice(0, 1) !== '/' && (arrUsers[chatId]? arrUsers[chatId].taskNumber : arrUsers[chatId])) {
+            if (text.slice(0, 1) !== '/' && (user? user.taskNumber : user)) {
                 return solveTask(chatId, text, bot)
             }
 
             if (text.split(' ')[1] !== undefined && !isNaN(text.split(' ')[1].slice(0, 1))){
-                if (arrUsers[chatId] === undefined) return
-                if(arrUsers[chatId].unitNum === null && text.split(' ')[0] === 'Unit'){
+                if (user === undefined) return
+                if(user.unitNum === null && text.split(' ')[0] === 'Unit'){
                     return selectUnit(bot, chatId, text.split(' ')[1])
                 }
-                if(arrUsers[chatId].lessonNum === null && text.split(' ')[0] === 'Lesson'){
+                if(user.lessonNum === null && text.split(' ')[0] === 'Lesson'){
                     return selectLesson(bot, chatId, text.split(' ')[1])
                 }
-                if(arrUsers[chatId].taskNumber === null && text.split(' ')[0] === 'Exercise'){
+                if(user.taskNumber === null && text.split(' ')[0] === 'Exercise'){
                     return lessonTask(bot, chatId, text.split(' ')[1])
                 }
             }
@@ -135,51 +173,31 @@ const start = () => {
     bot.on('callback_query', async msg => {
         const data = msg.data
         const chatId = msg.message.chat.id
-        const user = msg.from.username
-
-        // return
+        const user = await stageManager.getUserState(chatId)
+        const tasks = await stageManager.getTasks(user.lessonNum, user.unitNum)
 
         console.log(data)
 
         if (data === "/tasks") {
-            if(arrUsers[chatId].arrTasks === undefined){
+            if(tasks === undefined){
                 return startMessage(bot, chatId)
             }
-            // await getAllTasks()
-            return showTasks(chatId, arrUsers[chatId].arrTasks)
+            return showTasks(chatId, tasks)
         }
-        // if (data.slice(0, 1) !== '/') {
-        //     return createTask(bot, chatId, data)
-        // }
 
         return bot.sendMessage(chatId, 'Неверно, попробуй еще раз)')
     })
 
-    // function createTasksButtons() {
-    //
-    //     const arrTasksButtons = []
-    //
-    //     for (let i = 0; i < arrTasks.length; i++) {
-    //         arrTasksButtons[i] = [{text: arrTasks[i].taskNumber, callback_data: arrTasks[i].taskNumber}]
-    //     }
-    //
-    //     const buttonsTasks = {
-    //         reply_markup: JSON.stringify({
-    //             inline_keyboard: arrTasksButtons
-    //         })
-    //     }
-    //     return buttonsTasks
-    // }
-
     async function lessonTask(bot, chatId, text) {
         const taskNumber = Number(text.split(".")[0])
+        const user = await stageManager.getUserState(chatId)
 
-        setUserState(chatId, arrUsers[chatId].unitNum, arrUsers[chatId].lessonNum, taskNumber)
+        await stageManager.setUserState(chatId, user.unitNum, user.lessonNum, taskNumber)
 
-        const arrTasks = arrUsers[chatId].arrTasks
+        const arrTasks = await stageManager.getTasks(user.lessonNum, user.unitNum)
 
         const task = arrTasks.filter(item => item.taskNumber == taskNumber)[0]
-        // return
+
         const taskType = task.type
 
         const returnButtons = {
@@ -195,7 +213,7 @@ const start = () => {
 
         if(taskType === 'the_video'){
             await bot.sendMessage(chatId, task.taskType)
-            await setUserState(chatId, arrUsers[chatId].unitNum, arrUsers[chatId].lessonNum, taskNumber, 0)
+            await stageManager.setUserState(chatId, user.unitNum, user.lessonNum, taskNumber, 0)
             await createVideo(chatId, task, 0)
         }
         if(taskType === 'the_translate'){
@@ -229,9 +247,10 @@ const start = () => {
     }
 
     async function solveTask(chatId, text, bot){
-        const arrTasks = arrUsers[chatId].arrTasks
+        const user = await stageManager.getUserState(chatId)
+        const arrTasks = await stageManager.getTasks(user.lessonNum, user.unitNum)
 
-        const taskNumber = arrUsers[chatId].taskNumber
+        const taskNumber = user.taskNumber
         const task = arrTasks.filter(item => item.taskNumber == taskNumber)[0]
         const taskType = task.type
 
@@ -245,7 +264,7 @@ const start = () => {
         }
 
         if(taskType === 'the_repeat'){
-            var res = await solveSpeechRecognition(task.rightAnswer, text)
+            var res = await solveSpeechRecognition(task.rightAnswer, text, task.taskText)
         }
 
         if(taskType === 'the_speech_recognition'){
@@ -262,7 +281,7 @@ const start = () => {
                     remove_keyboard: true
                 })
             })
-            await setUserState(chatId, arrUsers[chatId].unitNum, arrUsers[chatId].lessonNum, null)
+            await stageManager.setUserState(chatId, user.unitNum, user.lessonNum, null)
             return bot.sendSticker(chatId, 'https://tlgrm.ru/_/stickers/04b/607/04b60777-fa2d-3852-9086-a52e95fc223b/3.webp', {
                 reply_markup: JSON.stringify({
                     inline_keyboard: [
@@ -324,7 +343,7 @@ const start = () => {
 
         {
             res: boolean,
-            text: string //not empty
+            text: string //not empty!!!, in russian language
         }
 
         VERY IMPORTANT
@@ -367,21 +386,6 @@ const start = () => {
     }
 
     async function createRepeat(chatId, task){
-        // try {
-        //     const response = await request.defaults({ encoding: null }).get(task.audio, {
-        //         headers: {
-        //             'Connection': 'keep-alive',
-        //             'Accept-Encoding': '',
-        //             'Accept-Language': 'en-US,en;q=0.8'
-        //         }
-        //     })
-        //     await bot.sendMessage(chatId, task.taskText)
-        //     await bot.sendVoice(chatId, response)
-        // }
-        // catch (error) {
-        //     return Promise.reject(error);
-        // }
-
         await bot.sendMessage(chatId, task.taskText)
 
         const voice = await getVoice(task.audio)
@@ -402,8 +406,7 @@ const start = () => {
         });
         
             const message = res.choices[0].message.content;
-        
-            // Попытаемся распарсить ответ как JSON
+
             let result;
             try {
                 result = JSON.parse(message);
@@ -411,8 +414,7 @@ const start = () => {
                 result = { res: false, text: "Ошибка в ответе искуственного интеллекта. Попробуйте ещё раз!" };
                 console.log(result)
             }
-        
-            // Проверка на наличие необходимых полей в результате
+
             if (typeof result.res === 'boolean' && typeof result.text === 'string') {
                 return result;
             } else {
@@ -425,6 +427,7 @@ const start = () => {
     }
 
     async function solveVideo(chatId, task, asw, stage){
+    const user = await stageManager.getUserState(chatId)
         const rightAnswer = task.rightAnswer[stage]
         if (rightAnswer === asw) {
             if(stage === task.rightAnswer.length - 1){
@@ -434,8 +437,8 @@ const start = () => {
                 }
             }else{
                 await bot.sendMessage(chatId, 'Верно!')
-                await setUserState(chatId, arrUsers[chatId].unitNum, arrUsers[chatId].lessonNum, task.taskNumber, stage+1)
-                createVideo(chatId, task, stage+1)
+                await stageManager.setUserState(chatId, user.unitNum, user.lessonNum, task.taskNumber, stage+1)
+                await createVideo(chatId, task, stage+1)
                 return {
                     res: false,
                     text: ''
@@ -501,29 +504,6 @@ const start = () => {
         }
     }
 
-    async function setUserState(chatId, unitNum=null, lessonNum=null, taskNumber=null, stage = null) {
-        const res = await axios.post(process.env.BE_URL+ '/user/'+chatId, {chatId: chatId, unitNum: unitNum, lessonNum: lessonNum, taskNumber: taskNumber, stage: stage})
-        const user = res.data
-        arrUsers[chatId] = {...arrUsers[chatId], ...{user: chatId, unitNum: user.unitNum, lessonNum: user.lessonNum,  taskNumber: user.taskNumber, stage: user.stage}}
-    }
-
-    // async function getAllTasks() {
-    //     // if(counter >= 5){
-    //     //     counter = 0
-    //         const res = await axios.get(process.env.BE_URL+ '/exercise/all')
-    //         arrTasks = res.data
-    //         return
-    //     // }
-    //     // counter++
-    // }
-
-    async function initUsers() {
-        const res = await axios.get(process.env.BE_URL+ '/user/all')
-        for(const user of res.data){
-            arrUsers[user.chatId] = {user: user.chatId, taskNumber: res.data.taskNumber, stage: res.data.stage}
-        }
-    }
-
     async function startMessage(bot, chatId){
         const startStudy = {
             reply_markup: JSON.stringify({
@@ -533,15 +513,10 @@ const start = () => {
             })
         }
 
-        setUserState(chatId)
+        await stageManager.setUserState(chatId)
 
         try {
             await bot.sendSticker(chatId, 'https://tlgrm.eu/_/stickers/556/44c/55644c98-65e1-4e92-b22e-26c930f07378/8.webp'
-                //     , {
-                //     reply_markup: JSON.stringify({
-                //         remove_keyboard: true
-                //     })
-                // }
                 )
         } catch(e) {
             console.log('error')
@@ -561,7 +536,7 @@ const start = () => {
                     ...res.data.filter((x,i,a) => a.map(item => item.unitNum).indexOf(x.unitNum) === i).map(item => {
                         return [{text: `Unit ${item.unitNum}. ${item.unitName}`}]
                     })  ,
-                    [{text: selectNavigateButton(chatId)}]
+                    [{text: await selectNavigateButton(chatId)}]
                 ]
 
             })
@@ -575,7 +550,7 @@ const start = () => {
         const unitNum = Number(text.split(".")[0])
         const lessons = res.data.filter(item => item.unitNum === unitNum)
 
-        await setUserState(chatId, unitNum)
+        await stageManager.setUserState(chatId, unitNum)
 
         const buttons = {
             reply_markup: JSON.stringify({
@@ -584,7 +559,7 @@ const start = () => {
                     ...lessons.map(item => {
                         return [{text: `Lesson ${item.lessonNum}. ${item.lessonName}`}]
                     }),
-                    [{text: selectNavigateButton(chatId)}]
+                    [{text: await selectNavigateButton(chatId)}]
                 ]
 
             })
@@ -595,17 +570,18 @@ const start = () => {
     }
 
     async function selectLesson(bot, chatId, text){
-        const res = await axios.get(process.env.BE_URL+ '/exercise/all')
+        const user = await stageManager.getUserState(chatId)
         const lessonNum = Number(text.split(".")[0])
-        const unitNum = arrUsers[chatId].unitNum
-        const tasks = res.data.filter(item => item.unitNum === unitNum && item.lessonNum === lessonNum)
-        await setUserState(chatId, unitNum, lessonNum)
-        showTasks(chatId, tasks)
+        const unitNum = user.unitNum
+        const tasks = await stageManager.getTasks(lessonNum, unitNum)
+        await stageManager.setUserState(chatId, unitNum, lessonNum)
+        await showTasks(chatId, tasks)
 
     }
 
     async function showTasks (chatId, tasks){
-        await setUserState(chatId, arrUsers[chatId].unitNum, arrUsers[chatId].lessonNum)
+        const user = await stageManager.getUserState(chatId)
+        await stageManager.setUserState(chatId, user.unitNum, user.lessonNum)
 
         const buttons = {
             reply_markup: JSON.stringify({
@@ -615,22 +591,21 @@ const start = () => {
                         .map(item => {
                         return [{text: `Exercise ${item.taskNumber}. ${item.taskName}`}]
                     }),
-                    [{text: selectNavigateButton(chatId)}]
+                    [{text: await selectNavigateButton(chatId)}]
                 ]
 
             })
         }
 
-        arrUsers[chatId] = {...arrUsers[chatId], arrTasks: tasks}
-
         return await bot.sendMessage(chatId, "Выбери задание!", buttons)
     }
 
 
-    function selectNavigateButton(chatId){
-        for([key, value] of Object.entries(navigationPanel)){
-            if(arrUsers[chatId] === undefined) return
-            if(value.unitNum(arrUsers[chatId].unitNum) && value.lessonNum(arrUsers[chatId].lessonNum) && value.taskNumber(arrUsers[chatId].taskNumber)){
+    async function selectNavigateButton(chatId){
+    const user = await stageManager.getUserState(chatId)
+        for(let [key, value] of Object.entries(navigationPanel)){
+            if(user === undefined) return
+            if(value.unitNum(user.unitNum) && value.lessonNum(user.lessonNum) && value.taskNumber(user.taskNumber)){
                 return key
             }
         }
@@ -649,7 +624,6 @@ const start = () => {
                     Authorization: `Api-Key ${yandexToken}`,
                 },
                 params: {
-                    // text: text,
                     lang: 'en-US',
                     format: 'mp3',
                     voice: 'john',
@@ -708,6 +682,20 @@ const start = () => {
             return buffer
         }
     }
+
+async function convertVideoToH264(inputPath, outputPath) {
+    return new Promise((resolve, reject) => {
+        ffmpeg(inputPath)
+            .outputOptions([
+                '-c:v libx264',  // Конвертация видео в H.264
+                '-preset fast',  // Быстрый пресет
+                '-crf 22'        // Константа качества (0 - наилучшее качество, 51 - наихудшее)
+            ])
+            .on('end', resolve)
+            .on('error', reject)
+            .save(outputPath);
+    });
+}
 
 
 
