@@ -16,7 +16,7 @@ dotenv.config();
 const token = process.env.BOT_TOKEN;
 const yandexToken = process.env.YANDEX_TOKEN;
 
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+//process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 const httpsAgent = new HttpsProxyAgent({
     host: '45.141.185.132',
