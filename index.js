@@ -10,7 +10,7 @@ export const __filename = fileURLToPath(import.meta.url);
 export const directory = path.dirname(__filename);
 
 
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+//process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 const start = () => {
     bot.on('channel_post', async (msg) => {
