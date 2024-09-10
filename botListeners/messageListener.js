@@ -30,7 +30,7 @@ export async function messageListener(chatId, text, msg) {
 
     if(text !== undefined){
         if (text.slice(0, 1) !== '/' && (user? user.taskNumber : user)) {
-            return solveTask(chatId, text, bot)
+            return solveTask(chatId, text, bot, 'text')
         }
 
         if (text.split(' ')[1] !== undefined && !isNaN(text.split(' ')[1].slice(0, 1))){

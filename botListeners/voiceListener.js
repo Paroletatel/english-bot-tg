@@ -15,6 +15,6 @@ export async function voiceListener(chatId, msg) {
     }
 
     if((user? user.taskNumber : user)){
-        return solveTask(chatId, text, bot)
+        return solveTask(chatId, text, bot, 'voice')
     }
 }

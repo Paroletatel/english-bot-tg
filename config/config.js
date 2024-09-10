@@ -1,7 +1,5 @@
 import HttpsProxyAgent from "https-proxy-agent";
 import OpenAI from "openai";
-import {fileURLToPath} from "url";
-import path from "path";
 import TelegramApi from "node-telegram-bot-api";
 import {startMessage} from "../index.js";
 import {State} from "../state.js";

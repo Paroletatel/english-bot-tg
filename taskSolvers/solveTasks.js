@@ -4,7 +4,7 @@ import {solveTranslate} from "./translate.js";
 import {solveSpeechRecognition} from "./speachRecognition.js";
 import {solveRightOne} from "./rightOne.js";
 
-export async function solveTask(chatId, text, bot){
+export async function solveTask(chatId, text, bot, listener=null){
     const user = await stageManager.getUserState(chatId)
     const arrTasks = await stageManager.getTasks(user.lessonNum, user.unitNum)
 
@@ -21,11 +21,11 @@ export async function solveTask(chatId, text, bot){
         var res = await solveTranslate(task.rightAnswer, text)
     }
 
-    if(taskType === 'the_repeat'){
+    if(taskType === 'the_repeat' && listener === 'voice'){
         var res = await solveSpeechRecognition(task.rightAnswer, text, task.taskText)
     }
 
-    if(taskType === 'the_speech_recognition'){
+    if(taskType === 'the_speech_recognition' && listener === 'voice'){
         var res = await solveSpeechRecognition(task.rightAnswer, text, task.taskText)
     }
 
