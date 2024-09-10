@@ -15,7 +15,7 @@ export async function solveSpeechRecognition(rightAnswer, asw, task) {
 
         Your main task is compare [rightAnswer] with a answer of a user.
         
-        Check the user's answer with the correct answer and give him a hint if the answer does not match.
+        Check the user's answer with the correct answer and give him a hint if the answer does not match. Always explain what was a mistake.
 
         The answer must meet all standards of the English language
         
