@@ -21,12 +21,14 @@ export async function solveTask(chatId, text, bot, listener=null){
         var res = await solveTranslate(task.rightAnswer, text)
     }
 
-    if(taskType === 'the_repeat' && listener === 'voice'){
-        var res = await solveSpeechRecognition(task.rightAnswer, text, task.taskText)
+    if(taskType === 'the_repeat'){
+        if (listener === 'voice') var res = await solveSpeechRecognition(task.rightAnswer, text, task.taskText)
+        else await bot.sendMessage(chatId, 'Отправьте голосовое сообщение')
     }
 
-    if(taskType === 'the_speech_recognition' && listener === 'voice'){
-        var res = await solveSpeechRecognition(task.rightAnswer, text, task.taskText)
+    if(taskType === 'the_speech_recognition'){
+        if (listener === 'voice') var res = await solveSpeechRecognition(task.rightAnswer, text, task.taskText)
+        else await bot.sendMessage(chatId, 'Отправьте голосовое сообщение')
     }
 
     if(taskType === 'the_right_one'){
