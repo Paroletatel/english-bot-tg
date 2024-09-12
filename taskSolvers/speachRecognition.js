@@ -1,11 +1,13 @@
 import dedent from "dedent";
 import request from "request-promise";
+import { pipeline } from 'stream/promises';
 import axios from "axios";
 import path from "path";
 import fsExists from "fs.promises.exists";
 import fs from "fs";
 import {bot, openAi, yandexToken} from "../config/config.js";
 import {directory} from "../index.js";
+import {createClient} from "@deepgram/sdk";
 
 export async function solveSpeechRecognition(rightAnswer, asw, task) {
     const system = dedent`
@@ -80,61 +82,80 @@ export async function createRepeat(chatId, task){
 
     const voice = await getVoice(task.audio)
 
-    await bot.sendVoice(chatId, voice)
+    try {
+        await bot.sendVoice(chatId, voice);
+    } catch (e) {
+        console.error(e)
+        await bot.sendMessage(chatId, 'Не удалось отправить вам голосовое сообщение. Возможно вы ограничили возможность отправки вам голосовых сообщений')
+    }
 }
 
 export async function recognizeSpeech(fileLink){
     try {
-        const response = await request.defaults({ encoding: null }).get(fileLink)
+        // const response = await request.defaults({ encoding: null }).get(fileLink)
+        //
+        // const url = 'https://stt.api.cloud.yandex.net/speech/v1/stt:recognize'
+        // try {
+        //     const res = await axios.post(url, response, {
+        //         headers: {
+        //             Authorization: `Api-Key ${yandexToken}`,
+        //         },
+        //         params: {
+        //             lang: 'en-US',
+        //         }
+        //     })
+        //
+        //     return Promise.resolve(res.data.result)
+        // } catch (e) {
+        //     console.log(e)
+        //     return Promise.reject(e)
+        // }
+        const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
+        const { result, error } = await deepgram.listen.prerecorded.transcribeUrl(
+            {
+                url: fileLink,
+            },
+            {
+                model: "general",
+                punctuate: false,
+                profanity_filter: false,
+                smart_format: false,
+                tier: 'base',
+            }
+        );
 
-        const url = 'https://stt.api.cloud.yandex.net/speech/v1/stt:recognize'
-        try {
-            const res = await axios.post(url, response, {
-                headers: {
-                    Authorization: `Api-Key ${yandexToken}`,
-                },
-                params: {
-                    lang: 'en-US',
-                }
-            })
-
-            return Promise.resolve(res.data.result)
-        } catch (e) {
-            console.log(e)
-            return Promise.reject(e)
+        if (error) {
+            console.error(error);
+            return null;
         }
+        if (!error) return result.results.channels[0].alternatives[0].transcript;
     }
     catch (error) {
-        return Promise.reject(error);
+        return error;
     }
 }
 
 export async function getSpeechFromText(text) {
 
-    const ssmlText = await useSSML(text)
-
-    const url = 'https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize'
     try {
-        const res = await axios.get(url, {
-            headers: {
-                Authorization: `Api-Key ${yandexToken}`,
-            },
-            params: {
-                lang: 'en-US',
-                format: 'mp3',
-                voice: 'john',
-                speed: 0.8,
-                ssml: ssmlText
-            },
-            responseType: 'stream'
-        })
+        const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
+        const response = await deepgram.speak.request(
+            { text },
+            {
+                model: 'aura-athena-en', // Указываем модель
+                encoding: 'mp3',
+            }
+        );
 
-        const stream = res.data
-
-        return Promise.resolve(stream)
+        const stream = await response.getStream();
+        if (stream) {
+            return await stream2buffer(stream);
+        } else {
+            console.error('Error generating audio');
+        }
     } catch (e) {
         console.log(e)
-        return Promise.reject(e)
+        return e
     }
 }
 
@@ -152,29 +173,37 @@ export async function useSSML(text){
 
 export async function stream2buffer(stream) {
 
-    return new Promise((resolve, reject) => {
+    const reader = stream.getReader();
+    const chunks = [];
 
-        const _buf = [];
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+    }
 
-        stream.on("data", (chunk) => _buf.push(chunk));
-        stream.on("end", () => resolve(Buffer.concat(_buf)));
-        stream.on("error", (err) => reject(err));
-    });
+    const dataArray = chunks.reduce(
+        (acc, chunk) => Uint8Array.from([...acc, ...chunk]),
+        new Uint8Array(0)
+    );
+
+    return Buffer.from(dataArray.buffer);
 }
 
 export async function getVoice(text){
     const wd = path.join(directory, 'voice')
-    const file = path.join(wd, `/${text}`)
+    const filePath = path.join(wd, `${text}.mp3`);
 
-    if(!await fsExists(file)){
-        await fs.promises.mkdir(file)
-        const stream = await getSpeechFromText(text)
-        const buffer = await stream2buffer(stream)
+    if (!await fs.promises.stat(filePath).then(() => true).catch(() => false)) {
+        await fs.promises.mkdir(wd, { recursive: true });
 
-        await fs.promises.writeFile(path.join(file,'voice.mp3'), buffer)
-        return buffer
-    }else{
-        const buffer = await fs.promises.readFile(path.join(file,'voice.mp3'))
-        return buffer
+        // Получаем аудио через API Deepgram в формате MP3
+        const buffer = await getSpeechFromText(text);
+
+        // Сохраняем MP3 файл
+        await fs.promises.writeFile(filePath, buffer);
     }
+
+    // Читаем MP3 файл и отправляем его через Telegram
+    return filePath//await fs.promises.readFile(filePath);
 }
