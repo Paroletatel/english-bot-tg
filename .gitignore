@@ -2,3 +2,4 @@ node_modules
 voice
 .idea
 .env
+.DS_Store

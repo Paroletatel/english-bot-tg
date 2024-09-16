@@ -1,11 +1,7 @@
 import dedent from "dedent";
-import request from "request-promise";
-import { pipeline } from 'stream/promises';
-import axios from "axios";
 import path from "path";
-import fsExists from "fs.promises.exists";
 import fs from "fs";
-import {bot, openAi, yandexToken} from "../config/config.js";
+import {bot, openAi} from "../config/config.js";
 import {directory} from "../index.js";
 import {createClient} from "@deepgram/sdk";
 
@@ -17,9 +13,11 @@ export async function solveSpeechRecognition(rightAnswer, asw, task) {
 
         Your main task is compare [rightAnswer] with a answer of a user.
         
-        Check the user's answer with the correct answer and give him a hint if the answer does not match. Always explain what was a mistake.
+        Check the user's answer with the correct answer and give him a hint if the answer does not match. Always explain what was a mistake. answer as if you received audio rather than text: that is, for example, you should say 'you said' instead of 'you wrote'
 
         The answer must meet all standards of the English language
+        
+        it doesn’t matter how the numerals are written (in numbers or text): for example, 6 or 'six' - both options are correct
         
         Upper or lower case doesnt meter. For example: right answer is [I am Anna], so it should be correct if user said [i am anna] or [I am anna] or [i am Anna]
         
