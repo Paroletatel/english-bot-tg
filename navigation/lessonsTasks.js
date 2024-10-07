@@ -4,8 +4,8 @@ import {createRightOne} from "../taskSolvers/rightOne.js";
 import {createRepeat, createSpeechRecognition} from "../taskSolvers/speachRecognition.js";
 import {createTranslate} from "../taskSolvers/translate.js";
 
-export async function lessonTask(bot, chatId, text) {
-    const taskNumber = Number(text.split(".")[0])
+export async function lessonTask(bot, chatId, taskNumber) {
+    //const taskNumber = Number(text.split(".")[0])
     const user = await stageManager.getUserState(chatId)
 
     await stageManager.setUserState(chatId, user.unitNum, user.lessonNum, taskNumber)
@@ -16,15 +16,15 @@ export async function lessonTask(bot, chatId, text) {
 
     const taskType = task.type
 
-    const returnButtons = {
-        reply_markup: JSON.stringify({
-            inline_keyboard: [
-                [{text: 'Список заданий', callback_data: "/tasks"}],
-            ]
-        })
-    }
+    // const returnButtons = {
+    //     reply_markup: JSON.stringify({
+    //         inline_keyboard: [
+    //             [{text: 'Список заданий', callback_data: "/tasks"}],
+    //         ]
+    //     })
+    // }
 
-    await bot.sendMessage(chatId, `Задание №${taskNumber}`, returnButtons)
+    await bot.sendMessage(chatId, `Задание №${taskNumber}`)
 
 
     if(taskType === 'the_video'){

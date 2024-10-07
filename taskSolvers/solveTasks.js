@@ -41,11 +41,14 @@ export async function solveTask(chatId, text, bot, listener=null){
                 remove_keyboard: true
             })
         })
-        await stageManager.setUserState(chatId, user.unitNum, user.lessonNum, null)
+        //await stageManager.setUserState(chatId, user.unitNum, user.lessonNum, null)
         return bot.sendSticker(chatId, 'https://tlgrm.ru/_/stickers/04b/607/04b60777-fa2d-3852-9086-a52e95fc223b/3.webp', {
             reply_markup: JSON.stringify({
                 inline_keyboard: [
-                    [{text: 'Список заданий', callback_data: "/tasks"}],
+                    [
+                        {text: 'Список заданий', callback_data: "/tasks"},
+                        {text: 'Следующее задание', callback_data: "/next"}
+                    ],
                 ]
             })
         })}

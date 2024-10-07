@@ -140,7 +140,7 @@ export async function getSpeechFromText(text) {
         const response = await deepgram.speak.request(
             { text },
             {
-                model: 'aura-athena-en', // Указываем модель
+                model: 'aura-luna-en', // Указываем модель
                 encoding: 'mp3',
             }
         );

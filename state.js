@@ -22,4 +22,9 @@ export class State {
         const res = await this.api.get('/exercise/all')
         return res.data.filter(item => item.unitNum === unitNum && item.lessonNum === lessonNum)
     }
+
+    async getNext(unitNum, lessonNum, taskNumber) {
+        const res = await this.api.post('/exercise/nextExercise', {unitNum: unitNum, lessonNum: lessonNum, taskNumber: taskNumber})
+        return res.data
+    }
 }

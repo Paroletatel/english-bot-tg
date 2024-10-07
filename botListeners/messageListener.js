@@ -42,7 +42,7 @@ export async function messageListener(chatId, text, msg) {
                 return selectLesson(bot, chatId, text.split(' ')[1])
             }
             if(user.taskNumber === null && text.split(' ')[0] === 'Exercise') {
-                return lessonTask(bot, chatId, text.split(' ')[1]);
+                return lessonTask(bot, chatId, Number(text.split(' ')[1].split(".")[0]));
             }
         }
     }
