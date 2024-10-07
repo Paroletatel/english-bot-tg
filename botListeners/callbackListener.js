@@ -17,16 +17,5 @@ export async function callbackListener(data, chatId) {
         return showTasks(chatId, tasks)
     }
 
-    if (data === '/next') {
-        const next = await stageManager.getNext(user.unitNum, user.lessonNum, user.taskNumber)
-        if (!next) {
-            bot.sendMessage(chatId, 'Поздравляю! Ты решил все задания!')
-            await stageManager.setUserState(chatId);
-            return unitList(bot, chatId)
-        }
-        await stageManager.setUserState(chatId, next.unitNum, next.lessonNum, next.taskNumber);
-        return await lessonTask(bot, chatId, next.taskNumber);
-    }
-
     return bot.sendMessage(chatId, 'Неверно, попробуй еще раз)')
 }

@@ -1,8 +1,10 @@
-import {stageManager} from "../config/config.js";
+import {bot, stageManager} from "../config/config.js";
 import {solveVideo} from "./video.js";
 import {solveTranslate} from "./translate.js";
 import {solveSpeechRecognition} from "./speachRecognition.js";
 import {solveRightOne} from "./rightOne.js";
+import {unitList} from "../navigation/unitsList.js";
+import {lessonTask} from "../navigation/lessonsTasks.js";
 
 export async function solveTask(chatId, text, bot, listener=null){
     const user = await stageManager.getUserState(chatId)
@@ -42,15 +44,25 @@ export async function solveTask(chatId, text, bot, listener=null){
             })
         })
         //await stageManager.setUserState(chatId, user.unitNum, user.lessonNum, null)
-        return bot.sendSticker(chatId, 'https://tlgrm.ru/_/stickers/04b/607/04b60777-fa2d-3852-9086-a52e95fc223b/3.webp', {
-            reply_markup: JSON.stringify({
-                inline_keyboard: [
-                    [
-                        {text: 'Список заданий', callback_data: "/tasks"},
-                        {text: 'Следующее задание', callback_data: "/next"}
-                    ],
-                ]
-            })
-        })}
+        await bot.sendSticker(chatId, 'https://tlgrm.ru/_/stickers/04b/607/04b60777-fa2d-3852-9086-a52e95fc223b/3.webp'
+            // , {
+            // reply_markup: JSON.stringify({
+            //     inline_keyboard: [
+            //         [
+            //             {text: 'Список заданий', callback_data: "/tasks"},
+            //             {text: 'Следующее задание', callback_data: "/next"}
+            //         ],
+            //     ]
+            // })}
+        )
+        const next = await stageManager.getNext(user.unitNum, user.lessonNum, user.taskNumber)
+        if (!next) {
+            bot.sendMessage(chatId, 'Поздравляю! Ты решил все задания!')
+            await stageManager.setUserState(chatId);
+            return unitList(bot, chatId)
+        }
+        await stageManager.setUserState(chatId, next.unitNum, next.lessonNum, next.taskNumber);
+        return await lessonTask(bot, chatId, next.taskNumber);
+    }
     return res.text? bot.sendMessage(chatId, res.text) : null
 }
